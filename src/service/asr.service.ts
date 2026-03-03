@@ -96,7 +96,7 @@ export class AsrService {
   async *transcribeStream(
     audioStream: NodeJS.ReadableStream,
     options: AsrServiceOptions
-  ): AsyncGenerator<TranscriptMessage, void, unknown> {
+  ): AsyncGenerator<TranscriptMessage, void, undefined> {
     this.logger.warn('ASR stream transcription is not implemented yet', {
       options,
     });
