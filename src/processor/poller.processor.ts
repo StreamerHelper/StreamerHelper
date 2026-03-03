@@ -1,5 +1,5 @@
-import { IProcessor } from '@midwayjs/bullmq';
-import { Config, ILogger, Inject, Logger } from '@midwayjs/core';
+import { IProcessor, Processor } from '@midwayjs/bullmq';
+import { Config, FORMAT, ILogger, Inject, Logger } from '@midwayjs/core';
 import * as path from 'path';
 import { JOB_STATUS } from '../interface';
 import { JobService } from '../service/job.service';
@@ -11,11 +11,11 @@ import { StreamerService } from '../service/streamer.service';
  * 主播状态轮询任务
  * 使用 BullMQ 重复执行功能，每分钟检查一次活跃主播的直播状态
  */
-// @Processor('poller', {
-//   repeat: {
-//     pattern: FORMAT.CRONTAB.EVERY_PER_10_SECOND,
-//   },
-// })
+@Processor('poller', {
+  repeat: {
+    pattern: FORMAT.CRONTAB.EVERY_PER_10_SECOND,
+  },
+})
 export class PollerProcessor implements IProcessor {
   @Config('livestream.poller')
   private pollerConfig: {
