@@ -1,1 +1,0 @@
-global.config  = require('../templates/info.json')
