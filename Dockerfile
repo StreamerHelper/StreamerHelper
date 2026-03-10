@@ -1,19 +1,40 @@
-FROM node:alpine
+# 构建阶段
+FROM node:18-alpine AS builder
+
 WORKDIR /app
-# copy project file
-COPY package.json .
-# install ffmpeg
-RUN apk update && \
-    apk add yasm && \
-    apk add ffmpeg python3 make gcc g++ musl-dev tzdata && \
-    cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo "Asia/Shanghai" > /etc/timezone && \
-    apk del tzdata
-# install node packages
-RUN npm set progress=false && npm config set depth 0 && npm config set legacy-peer-deps true
-RUN npm i --registry=https://registry.npmmirror.com
-# compile
-COPY . /app
+
+# 安装依赖
+COPY package*.json ./
+RUN npm ci --only=production
+
+# 复制源代码
+COPY . .
+
+# 构建 TypeScript
 RUN npm run build
 
-CMD node /app/dist/index.js
+# 生产阶段
+FROM node:18-alpine
+
+# 安装 FFmpeg
+RUN apk add --no-cache ffmpeg
+
+WORKDIR /app
+
+# 复制构建产物和依赖
+COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+
+# 创建日志和临时目录
+RUN mkdir -p logs temp
+
+# 暴露端口
+EXPOSE 7001
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:7001/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+
+# 启动应用
+CMD ["node", "bootstrap.js"]
