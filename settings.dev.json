@@ -1,0 +1,44 @@
+{
+  "app": {
+    "port": 7001,
+    "keys": "dev-secret-key-change-in-production",
+    "nodeEnv": "development"
+  },
+  "database": {
+    "host": "localhost",
+    "port": 5432,
+    "username": "postgres",
+    "password": "postgres",
+    "database": "streamerhelper",
+    "ssl": false
+  },
+  "redis": {
+    "host": "localhost",
+    "port": 6379,
+    "password": "",
+    "db": 0
+  },
+  "s3": {
+    "endpoint": "http://localhost:9000",
+    "region": "us-east-1",
+    "accessKey": "minioadmin",
+    "secretKey": "minioadmin",
+    "bucket": "streamerhelper-archive"
+  },
+  "recorder": {
+    "segmentDuration": 10,
+    "cacheMaxSegments": 3,
+    "heartbeatInterval": 5,
+    "heartbeatTimeout": 10,
+    "maxRecordingTime": 86400
+  },
+  "poller": {
+    "checkInterval": 60,
+    "totalInstances": 1,
+    "concurrency": 5
+  },
+  "upload": {
+    "defaultTid": 171,
+    "defaultTitleTemplate": "{streamerName}的直播录像 {date}"
+  }
+}

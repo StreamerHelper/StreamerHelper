@@ -26,8 +26,10 @@ export default {
         ssl: config.database.ssl,
         entities: ['**/entity/*.entity{.ts,.js}'],
         synchronize: false,
-        migrations: ['dist/migration/**/*.js'],
-        migrationsRun: isProduction,
+        // 迁移通过独立脚本执行，不在应用启动时自动运行
+        // 避免 Midway 框架加载迁移类时出错
+        migrations: [],
+        migrationsRun: false,
         logging: !isProduction,
         extra: {
           timezone: 'UTC',

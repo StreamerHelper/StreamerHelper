@@ -1,9 +1,13 @@
 /**
  * Configuration Loader
  *
- * 配置优先级：环境变量 > 配置文件(config.json) > 默认值
- * 配置文件：~/.streamer-helper/config.json（可通过 CONFIG_DIR 或 /app/config 覆盖）
- * 目录：环境变量 CONFIG_DIR > /app/config (Docker) > ~/.streamer-helper
+ * 配置优先级：环境变量 > 配置文件(settings.json) > 默认值
+ *
+ * 配置文件搜索路径（按优先级）：
+ * 1. CONFIG_DIR 环境变量指定的目录
+ * 2. /app/config (Docker 容器内)
+ * 3. 当前工作目录下的 config/settings.json (本地开发)
+ * 4. ~/.streamer-helper/settings.json (默认)
  */
 
 import * as fs from 'fs';
@@ -11,12 +15,38 @@ import { merge } from 'lodash';
 import * as os from 'os';
 import * as path from 'path';
 
-const CONFIG_DIR = process.env.CONFIG_DIR ||
-  (fs.existsSync('/app/config') ? '/app/config' : path.join(os.homedir(), '.streamer-helper'));
+// 配置文件名
+const CONFIG_FILENAME = 'settings.json';
 
-const CONFIG_JSON = path.join(CONFIG_DIR, 'config.json');
+/**
+ * 获取配置目录
+ * 优先级：环境变量 > /app/config > ./config > ~/.streamer-helper
+ */
+function getConfigDir(): string {
+  // 1. 环境变量指定
+  if (process.env.CONFIG_DIR) {
+    return process.env.CONFIG_DIR;
+  }
 
-/** 当前实际使用的配置文件路径（存在则返回，否则为将写入的 config.json） */
+  // 2. Docker 容器内
+  if (fs.existsSync('/app/config')) {
+    return '/app/config';
+  }
+
+  // 3. 本地开发：当前工作目录下的 config 目录
+  const localConfigDir = path.join(process.cwd(), 'config');
+  if (fs.existsSync(localConfigDir)) {
+    return localConfigDir;
+  }
+
+  // 4. 默认：用户主目录
+  return path.join(os.homedir(), '.streamer-helper');
+}
+
+const CONFIG_DIR = getConfigDir();
+const CONFIG_JSON = path.join(CONFIG_DIR, CONFIG_FILENAME);
+
+/** 当前实际使用的配置文件路径 */
 function getConfigFilePath(): string {
   return CONFIG_JSON;
 }
@@ -228,7 +258,7 @@ function readConfigFile(filePath: string): Partial<AppConfig> {
 
 /**
  * 加载配置
- * 优先级：环境变量 > 配置文件(config.json) > 默认值
+ * 优先级：环境变量 > 配置文件(settings.json) > 默认值
  */
 export function loadConfig(): AppConfig {
   const configPath = getConfigFilePath();

@@ -1,6 +1,8 @@
 import {
+    CreateBucketCommand,
     DeleteObjectCommand,
     GetObjectCommand,
+    HeadBucketCommand,
     ListObjectsV2Command,
     PutObjectCommand,
     S3Client,
@@ -26,6 +28,34 @@ export class StorageService {
       credentials: this.s3Config.credentials,
       forcePathStyle: this.s3Config.forcePathStyle ?? true,
     });
+
+    // Ensure bucket exists
+    await this.ensureBucket();
+  }
+
+  /**
+   * 确保 bucket 存在，不存在则创建
+   */
+  private async ensureBucket(): Promise<void> {
+    try {
+      await this.client.send(
+        new HeadBucketCommand({ Bucket: this.s3Config.bucket })
+      );
+    } catch (error) {
+      // Bucket doesn't exist, create it
+      try {
+        await this.client.send(
+          new CreateBucketCommand({ Bucket: this.s3Config.bucket })
+        );
+        console.log(`[Storage] Created bucket: ${this.s3Config.bucket}`);
+      } catch (createError) {
+        // Ignore if bucket already exists (race condition)
+        const errMsg = createError instanceof Error ? createError.message : String(createError);
+        if (!errMsg.includes('BucketAlreadyExists') && !errMsg.includes('BucketAlreadyOwnedByYou')) {
+          console.error(`[Storage] Failed to create bucket: ${errMsg}`);
+        }
+      }
+    }
   }
 
   /**
