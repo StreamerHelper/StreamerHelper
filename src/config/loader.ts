@@ -1,21 +1,25 @@
 /**
  * Configuration Loader
  *
- * 配置优先级：环境变量 > 配置文件 > 默认值
- * 配置文件路径：~/.streamerhelper/config.yaml
+ * 配置优先级：环境变量 > 配置文件(config.json) > 默认值
+ * 配置文件：~/.streamer-helper/config.json（可通过 CONFIG_DIR 或 /app/config 覆盖）
+ * 目录：环境变量 CONFIG_DIR > /app/config (Docker) > ~/.streamer-helper
  */
 
 import * as fs from 'fs';
-import * as yaml from 'js-yaml';
 import { merge } from 'lodash';
 import * as os from 'os';
 import * as path from 'path';
 
-// 配置目录和文件路径
-// 优先级：环境变量 CONFIG_PATH > /app/config (Docker) > ~/.streamerhelper (本地开发)
 const CONFIG_DIR = process.env.CONFIG_DIR ||
-  (fs.existsSync('/app/config') ? '/app/config' : path.join(os.homedir(), '.streamerhelper'));
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.yaml');
+  (fs.existsSync('/app/config') ? '/app/config' : path.join(os.homedir(), '.streamer-helper'));
+
+const CONFIG_JSON = path.join(CONFIG_DIR, 'config.json');
+
+/** 当前实际使用的配置文件路径（存在则返回，否则为将写入的 config.json） */
+function getConfigFilePath(): string {
+  return CONFIG_JSON;
+}
 
 // 配置接口定义
 export interface AppConfig {
@@ -193,81 +197,17 @@ function ensureConfigDir(): void {
 }
 
 /**
- * 生成默认配置文件
+ * 生成默认配置文件（JSON，便于工具与脚本解析）
  */
 function generateDefaultConfigFile(): void {
   ensureConfigDir();
-
-  const yamlContent = `# StreamerHelper Configuration
-# 配置优先级：环境变量 > 配置文件 > 默认值
-# 文档：https://github.com/StreamerHelper/web#配置说明
-
-# ===========================================
-# 应用配置
-# ===========================================
-app:
-  nodeEnv: development    # development | production | test
-  port: 7001
-  keys: ${generateRandomKey()}  # Cookie 签名密钥，请妥善保管
-
-# ===========================================
-# 数据库配置 (PostgreSQL)
-# ===========================================
-database:
-  host: localhost
-  port: 5432
-  username: postgres
-  password: postgres
-  database: streamerhelper
-  ssl: false              # 生产环境建议开启
-
-# ===========================================
-# Redis 配置
-# ===========================================
-redis:
-  host: localhost
-  port: 6379
-  password: ""            # 无密码则留空
-  db: 0
-
-# ===========================================
-# S3/MinIO 存储配置
-# ===========================================
-s3:
-  endpoint: http://localhost:9000
-  region: us-east-1
-  accessKey: minioadmin
-  secretKey: minioadmin
-  bucket: streamerhelper-archive
-
-# ===========================================
-# 录制器配置
-# ===========================================
-recorder:
-  segmentDuration: 10        # 分片时长（秒）
-  cacheMaxSegments: 3        # 最大缓存分片数
-  heartbeatInterval: 5       # 心跳间隔（秒）
-  heartbeatTimeout: 10       # 心跳超时（秒）
-  maxRecordingTime: 86400    # 最大录制时长（秒），默认24小时
-
-# ===========================================
-# 轮询器配置
-# ===========================================
-poller:
-  checkInterval: 60          # 检查直播状态间隔（秒）
-  totalInstances: 1          # 实例数量
-  concurrency: 5             # 并发检查数
-
-# ===========================================
-# 上传配置
-# ===========================================
-upload:
-  defaultTid: 171            # 默认分区ID（电子竞技）
-  defaultTitleTemplate: "{streamerName}的直播录像 {date}"
-`;
-
-  fs.writeFileSync(CONFIG_FILE, yamlContent, 'utf-8');
-  console.log(`[Config] Created default config file at: ${CONFIG_FILE}`);
+  const defaultContent: AppConfig = {
+    ...DEFAULT_CONFIG,
+    app: { ...DEFAULT_CONFIG.app, keys: generateRandomKey() },
+  };
+  const jsonContent = JSON.stringify(defaultContent, null, 2);
+  fs.writeFileSync(CONFIG_JSON, jsonContent + '\n', 'utf-8');
+  console.log(`[Config] Created default config file at: ${CONFIG_JSON}`);
 }
 
 /**
@@ -279,32 +219,35 @@ function generateRandomKey(): string {
 }
 
 /**
+ * 从磁盘读取配置文件内容（JSON）
+ */
+function readConfigFile(filePath: string): Partial<AppConfig> {
+  const content = fs.readFileSync(filePath, 'utf-8');
+  return JSON.parse(content) as Partial<AppConfig>;
+}
+
+/**
  * 加载配置
- * 优先级：环境变量 > 配置文件 > 默认值
+ * 优先级：环境变量 > 配置文件(config.json) > 默认值
  */
 export function loadConfig(): AppConfig {
-  // 检查配置文件是否存在
-  if (!fs.existsSync(CONFIG_FILE)) {
+  const configPath = getConfigFilePath();
+  if (!fs.existsSync(configPath)) {
     generateDefaultConfigFile();
   }
 
-  // 读取配置文件
+  const effectivePath = getConfigFilePath();
   let fileConfig: Partial<AppConfig> = {};
   try {
-    const content = fs.readFileSync(CONFIG_FILE, 'utf-8');
-    fileConfig = yaml.load(content) as Partial<AppConfig>;
-    console.log(`[Config] Loaded config from: ${CONFIG_FILE}`);
+    fileConfig = readConfigFile(effectivePath);
+    console.log(`[Config] Loaded config from: ${effectivePath}`);
   } catch (error) {
     console.warn(`[Config] Failed to read config file, using defaults: ${error}`);
   }
 
-  // 获取环境变量覆盖
   const envOverrides = getEnvOverrides();
-
-  // 使用 lodash merge 深度合并配置
   const config = merge({}, DEFAULT_CONFIG, fileConfig, envOverrides);
 
-  // 设置 NODE_ENV 环境变量（确保 MidwayJS 能正确识别）
   if (config.app.nodeEnv) {
     process.env.NODE_ENV = config.app.nodeEnv;
   }
@@ -323,5 +266,5 @@ export function getConfig(): AppConfig {
 }
 
 export function getConfigPath(): string {
-  return CONFIG_FILE;
+  return getConfigFilePath();
 }

@@ -7,8 +7,7 @@ services:
     ports:
       - "7001:7001"
     volumes:
-      
-      - ~/.streamerhelper:/app/config:ro
+      - ~/.streamer-helper:/app/config:ro
       # 临时文件目录
       - ./temp:/app/temp
     environment:
