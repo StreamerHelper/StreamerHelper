@@ -5,9 +5,10 @@
  *
  * 配置文件搜索路径（按优先级）：
  * 1. CONFIG_DIR 环境变量指定的目录
- * 2. /app/config (Docker 容器内)
- * 3. 当前工作目录下的 config/settings.json (本地开发)
- * 4. ~/.streamer-helper/settings.json (默认)
+ * 2. 项目根目录的 settings.json (仅开发模式: NODE_ENV=local 或 development)
+ * 3. /app/config (Docker 容器内)
+ * 4. 当前工作目录下的 config/settings.json (本地开发)
+ * 5. ~/.streamer-helper/settings.json (默认)
  */
 
 import * as fs from 'fs';
@@ -19,8 +20,16 @@ import * as path from 'path';
 const CONFIG_FILENAME = 'settings.json';
 
 /**
+ * 判断是否为开发模式
+ */
+function isDevMode(): boolean {
+  const nodeEnv = process.env.NODE_ENV;
+  return nodeEnv === 'local' || nodeEnv === 'development';
+}
+
+/**
  * 获取配置目录
- * 优先级：环境变量 > /app/config > ./config > ~/.streamer-helper
+ * 优先级：环境变量 > 项目根目录(dev模式) > /app/config > ./config > ~/.streamer-helper
  */
 function getConfigDir(): string {
   // 1. 环境变量指定
@@ -28,18 +37,26 @@ function getConfigDir(): string {
     return process.env.CONFIG_DIR;
   }
 
-  // 2. Docker 容器内
+  // 2. 开发模式：优先读取项目根目录的 settings.json
+  if (isDevMode()) {
+    const projectRootConfig = path.join(process.cwd(), CONFIG_FILENAME);
+    if (fs.existsSync(projectRootConfig)) {
+      return process.cwd();
+    }
+  }
+
+  // 3. Docker 容器内
   if (fs.existsSync('/app/config')) {
     return '/app/config';
   }
 
-  // 3. 本地开发：当前工作目录下的 config 目录
+  // 4. 本地开发：当前工作目录下的 config 目录
   const localConfigDir = path.join(process.cwd(), 'config');
   if (fs.existsSync(localConfigDir)) {
     return localConfigDir;
   }
 
-  // 4. 默认：用户主目录
+  // 5. 默认：用户主目录
   return path.join(os.homedir(), '.streamer-helper');
 }
 
@@ -74,7 +91,6 @@ export interface AppConfig {
   };
   s3: {
     endpoint: string;
-    publicEndpoint?: string;  // 用于生成公开访问 URL
     region: string;
     accessKey: string;
     secretKey: string;
@@ -201,9 +217,6 @@ function getEnvOverrides(): Partial<AppConfig> {
   // S3
   if (process.env.S3_ENDPOINT) {
     overrides.s3 = { ...overrides.s3, endpoint: process.env.S3_ENDPOINT };
-  }
-  if (process.env.S3_PUBLIC_ENDPOINT) {
-    overrides.s3 = { ...overrides.s3, publicEndpoint: process.env.S3_PUBLIC_ENDPOINT };
   }
   if (process.env.S3_REGION) {
     overrides.s3 = { ...overrides.s3, region: process.env.S3_REGION };

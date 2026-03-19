@@ -30,10 +30,8 @@ export class StorageService {
       forcePathStyle: this.s3Config.forcePathStyle ?? true,
     });
 
-    // 创建公开 URL 用的客户端（使用 publicEndpoint）
-    const publicEndpoint = this.s3Config.publicEndpoint || this.s3Config.endpoint;
     this.publicClient = new S3Client({
-      endpoint: publicEndpoint,
+      endpoint: this.s3Config.endpoint,
       region: this.s3Config.region,
       credentials: this.s3Config.credentials,
       forcePathStyle: this.s3Config.forcePathStyle ?? true,

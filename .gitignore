@@ -15,4 +15,4 @@ temp/
 .mkv
 
 # Local config (copy from settings.dev.json)
-config/settings.json
+settings.json
