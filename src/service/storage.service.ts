@@ -19,11 +19,21 @@ export class StorageService {
   s3Config: any;
 
   private client: S3Client;
+  private publicClient: S3Client; // 用于生成公开 URL
 
   @Init()
   async init() {
     this.client = new S3Client({
       endpoint: this.s3Config.endpoint,
+      region: this.s3Config.region,
+      credentials: this.s3Config.credentials,
+      forcePathStyle: this.s3Config.forcePathStyle ?? true,
+    });
+
+    // 创建公开 URL 用的客户端（使用 publicEndpoint）
+    const publicEndpoint = this.s3Config.publicEndpoint || this.s3Config.endpoint;
+    this.publicClient = new S3Client({
+      endpoint: publicEndpoint,
       region: this.s3Config.region,
       credentials: this.s3Config.credentials,
       forcePathStyle: this.s3Config.forcePathStyle ?? true,
@@ -150,7 +160,7 @@ export class StorageService {
   }
 
   /**
-   * 获取下载 URL
+   * 获取下载 URL（使用公开 endpoint）
    */
   async getSignedUrl(key: string, expiresIn = 3600): Promise<string> {
     try {
@@ -158,7 +168,8 @@ export class StorageService {
         Bucket: this.s3Config.bucket,
         Key: key,
       });
-      return await getSignedUrl(this.client, command, { expiresIn });
+      // 使用 publicClient 生成 URL，确保前端可访问
+      return await getSignedUrl(this.publicClient, command, { expiresIn });
     } catch (error) {
       throw new StorageError(
         `Failed to get signed URL for ${key}: ${

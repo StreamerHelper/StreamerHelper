@@ -74,6 +74,7 @@ export interface AppConfig {
   };
   s3: {
     endpoint: string;
+    publicEndpoint?: string;  // 用于生成公开访问 URL
     region: string;
     accessKey: string;
     secretKey: string;
@@ -200,6 +201,9 @@ function getEnvOverrides(): Partial<AppConfig> {
   // S3
   if (process.env.S3_ENDPOINT) {
     overrides.s3 = { ...overrides.s3, endpoint: process.env.S3_ENDPOINT };
+  }
+  if (process.env.S3_PUBLIC_ENDPOINT) {
+    overrides.s3 = { ...overrides.s3, publicEndpoint: process.env.S3_PUBLIC_ENDPOINT };
   }
   if (process.env.S3_REGION) {
     overrides.s3 = { ...overrides.s3, region: process.env.S3_REGION };
