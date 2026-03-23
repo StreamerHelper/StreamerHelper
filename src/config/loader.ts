@@ -71,7 +71,7 @@ function getConfigFilePath(): string {
 // 配置接口定义
 export interface AppConfig {
   app: {
-    nodeEnv: 'development' | 'production' | 'test';
+    nodeEnv: 'development' | 'production' | 'test' | 'local';
     port: number;
     keys: string;
   };
@@ -91,6 +91,7 @@ export interface AppConfig {
   };
   s3: {
     endpoint: string;
+    publicEndpoint: string;
     region: string;
     accessKey: string;
     secretKey: string;
@@ -136,7 +137,8 @@ const DEFAULT_CONFIG: AppConfig = {
     db: 0,
   },
   s3: {
-    endpoint: 'http://localhost:9000',
+    endpoint: 'http://minio:9000',
+    publicEndpoint: 'http://localhost:9000',
     region: 'us-east-1',
     accessKey: 'minioadmin',
     secretKey: 'minioadmin',
@@ -217,6 +219,9 @@ function getEnvOverrides(): Partial<AppConfig> {
   // S3
   if (process.env.S3_ENDPOINT) {
     overrides.s3 = { ...overrides.s3, endpoint: process.env.S3_ENDPOINT };
+  }
+  if (process.env.S3_PUBLIC_ENDPOINT) {
+    overrides.s3 = { ...overrides.s3, publicEndpoint: process.env.S3_PUBLIC_ENDPOINT };
   }
   if (process.env.S3_REGION) {
     overrides.s3 = { ...overrides.s3, region: process.env.S3_REGION };

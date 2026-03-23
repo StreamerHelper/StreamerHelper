@@ -68,6 +68,7 @@ export default {
     // S3/MinIO 配置
     s3: {
       endpoint: config.s3.endpoint,
+      publicEndpoint: config.s3.publicEndpoint,
       region: config.s3.region,
       credentials: {
         accessKeyId: config.s3.accessKey,

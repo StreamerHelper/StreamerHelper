@@ -1,69 +1,69 @@
 import {
-    CreateBucketCommand,
     DeleteObjectCommand,
     GetObjectCommand,
-    HeadBucketCommand,
     ListObjectsV2Command,
     PutObjectCommand,
     S3Client,
+    S3ServiceException,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Config, Init, Provide, Scope, ScopeEnum } from '@midwayjs/core';
 import { Readable } from 'stream';
 import { StorageError } from '../interface';
 
+/**
+ * 从 S3 错误中提取详细信息
+ */
+function getS3ErrorMessage(error: unknown): string {
+  if (error instanceof S3ServiceException) {
+    return `[${error.name}] ${error.message} (Code: ${error.$fault}, StatusCode: ${error.$metadata?.httpStatusCode})`;
+  }
+  if (error instanceof Error) {
+    // AWS SDK 错误可能有额外属性
+    const awsError = error as any;
+    if (awsError.Code || awsError.$metadata) {
+      return `[${awsError.Code || awsError.name}] ${awsError.message || 'Unknown error'} (StatusCode: ${awsError.$metadata?.httpStatusCode})`;
+    }
+    return error.message || error.toString();
+  }
+  return String(error);
+}
+
 @Provide()
-@Scope(ScopeEnum.Request, { allowDowngrade: true })
+@Scope(ScopeEnum.Singleton)
 export class StorageService {
   @Config('streamerhelper.s3')
   s3Config: any;
 
+  /** 内部客户端：用于上传、下载、删除等操作 (endpoint: minio:9000) */
   private client: S3Client;
-  private publicClient: S3Client; // 用于生成公开 URL
+  
+  /** 公开客户端：用于生成浏览器可访问的签名 URL (publicEndpoint: localhost:9000) */
+  private publicClient: S3Client;
 
   @Init()
   async init() {
+    const { endpoint, publicEndpoint, region, credentials, forcePathStyle } = this.s3Config;
+    
+    console.log(`[Storage] Initializing S3 clients:`);
+    console.log(`[Storage]   - Internal endpoint: ${endpoint}`);
+    console.log(`[Storage]   - Public endpoint: ${publicEndpoint}`);
+    
+    // 内部客户端：用于服务端操作（容器内网络）
     this.client = new S3Client({
-      endpoint: this.s3Config.endpoint,
-      region: this.s3Config.region,
-      credentials: this.s3Config.credentials,
-      forcePathStyle: this.s3Config.forcePathStyle ?? true,
+      endpoint,
+      region,
+      credentials,
+      forcePathStyle: forcePathStyle ?? true,
     });
-
+    
+    // 公开客户端：用于生成浏览器可访问的 URL
     this.publicClient = new S3Client({
-      endpoint: this.s3Config.endpoint,
-      region: this.s3Config.region,
-      credentials: this.s3Config.credentials,
-      forcePathStyle: this.s3Config.forcePathStyle ?? true,
+      endpoint: publicEndpoint,
+      region,
+      credentials,
+      forcePathStyle: forcePathStyle ?? true,
     });
-
-    // Ensure bucket exists
-    await this.ensureBucket();
-  }
-
-  /**
-   * 确保 bucket 存在，不存在则创建
-   */
-  private async ensureBucket(): Promise<void> {
-    try {
-      await this.client.send(
-        new HeadBucketCommand({ Bucket: this.s3Config.bucket })
-      );
-    } catch (error) {
-      // Bucket doesn't exist, create it
-      try {
-        await this.client.send(
-          new CreateBucketCommand({ Bucket: this.s3Config.bucket })
-        );
-        console.log(`[Storage] Created bucket: ${this.s3Config.bucket}`);
-      } catch (createError) {
-        // Ignore if bucket already exists (race condition)
-        const errMsg = createError instanceof Error ? createError.message : String(createError);
-        if (!errMsg.includes('BucketAlreadyExists') && !errMsg.includes('BucketAlreadyOwnedByYou')) {
-          console.error(`[Storage] Failed to create bucket: ${errMsg}`);
-        }
-      }
-    }
   }
 
   /**
@@ -84,10 +84,10 @@ export class StorageService {
       await this.client.send(command);
       return key;
     } catch (error) {
+      const errorMsg = getS3ErrorMessage(error);
+      console.error(`[Storage] Upload failed for ${key}:`, errorMsg);
       throw new StorageError(
-        `Failed to upload ${key}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to upload ${key}: ${errorMsg}`,
         'upload',
         true
       );
@@ -112,10 +112,10 @@ export class StorageService {
       await this.client.send(command);
       return key;
     } catch (error) {
+      const errorMsg = getS3ErrorMessage(error);
+      console.error(`[Storage] Upload stream failed for ${key}:`, errorMsg);
       throw new StorageError(
-        `Failed to upload stream ${key}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to upload stream ${key}: ${errorMsg}`,
         'uploadStream',
         true
       );
@@ -147,10 +147,10 @@ export class StorageService {
       }
       return Buffer.concat(chunks);
     } catch (error) {
+      if (error instanceof StorageError) throw error;
+      const errorMsg = getS3ErrorMessage(error);
       throw new StorageError(
-        `Failed to download ${key}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to download ${key}: ${errorMsg}`,
         'download',
         true
       );
@@ -158,7 +158,7 @@ export class StorageService {
   }
 
   /**
-   * 获取下载 URL（使用公开 endpoint）
+   * 获取下载 URL（使用 publicClient 生成浏览器可访问的 URL）
    */
   async getSignedUrl(key: string, expiresIn = 3600): Promise<string> {
     try {
@@ -166,13 +166,12 @@ export class StorageService {
         Bucket: this.s3Config.bucket,
         Key: key,
       });
-      // 使用 publicClient 生成 URL，确保前端可访问
+      // 使用 publicClient 生成 URL，确保浏览器可以访问
       return await getSignedUrl(this.publicClient, command, { expiresIn });
     } catch (error) {
+      const errorMsg = getS3ErrorMessage(error);
       throw new StorageError(
-        `Failed to get signed URL for ${key}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to get signed URL for ${key}: ${errorMsg}`,
         'getSignedUrl',
         false
       );
@@ -190,10 +189,9 @@ export class StorageService {
       });
       await this.client.send(command);
     } catch (error) {
+      const errorMsg = getS3ErrorMessage(error);
       throw new StorageError(
-        `Failed to delete ${key}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to delete ${key}: ${errorMsg}`,
         'delete',
         true
       );
@@ -219,10 +217,9 @@ export class StorageService {
       const response = await this.client.send(command);
       return response.Contents?.map(obj => obj.Key!) || [];
     } catch (error) {
+      const errorMsg = getS3ErrorMessage(error);
       throw new StorageError(
-        `Failed to list ${prefix}: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
+        `Failed to list ${prefix}: ${errorMsg}`,
         'list',
         true
       );
@@ -230,10 +227,10 @@ export class StorageService {
   }
 
   /**
-   * 获取完整 S3 路径
+   * 获取完整 S3 路径（使用 publicEndpoint，供浏览器访问）
    */
   getS3Path(key: string): string {
-    const endpoint = this.s3Config.endpoint.replace(/\/$/, '');
-    return `${endpoint}/${this.s3Config.bucket}/${key}`;
+    const publicEndpoint = this.s3Config.publicEndpoint.replace(/\/$/, '');
+    return `${publicEndpoint}/${this.s3Config.bucket}/${key}`;
   }
 }
