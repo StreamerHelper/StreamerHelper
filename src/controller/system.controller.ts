@@ -1,6 +1,8 @@
 import { Framework } from '@midwayjs/bullmq';
 import { App, Controller, Get, Inject, Post, Query } from '@midwayjs/core';
 import { Application, Context } from '@midwayjs/koa';
+import * as fs from 'fs';
+import * as path from 'path';
 import {
     FailedStreamerInfo,
     LiveStreamInfo,
@@ -127,6 +129,16 @@ export class SystemController {
         }
       });
 
+      // 读取 package.json 获取项目版本
+      let version = 'unknown';
+      try {
+        const packagePath = path.join(process.cwd(), 'package.json');
+        const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf-8'));
+        version = packageJson.version || 'unknown';
+      } catch (e) {
+        // 如果读取失败，使用默认值
+      }
+
       return {
         timestamp: Date.now(),
         jobs: jobStats,
@@ -171,6 +183,13 @@ export class SystemController {
           },
         },
         queues: queueStats,
+        system: {
+          platform: process.platform,
+          arch: process.arch,
+          version,
+          uptime: process.uptime(),
+          memory: process.memoryUsage(),
+        },
       };
     } catch (error) {
       this.ctx.logger.error('Failed to get system info', {

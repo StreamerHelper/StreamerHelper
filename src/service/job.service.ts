@@ -338,11 +338,13 @@ export class JobService {
    * @param streamerName 主播名称筛选（可选）
    * @param startDate 开始日期筛选（可选，格式 YYYY-MM-DD）
    * @param endDate 结束日期筛选（可选，格式 YYYY-MM-DD）
+   * @param minSegmentCount 最小片段数量筛选（可选）
    */
   async findAllGroupedByDate(
     streamerName?: string,
     startDate?: string,
-    endDate?: string
+    endDate?: string,
+    minSegmentCount?: number
   ): Promise<Record<string, any[]>> {
     // 构建查询条件
     const queryBuilder = this.jobModel.createQueryBuilder('job');
@@ -373,6 +375,11 @@ export class JobService {
     const groups: Record<string, any[]> = {};
 
     for (const job of jobs) {
+      // 片段数量筛选：如果设置了 minSegmentCount，则只保留片段数大于该值的任务
+      if (minSegmentCount !== undefined && job.segmentCount <= minSegmentCount) {
+        continue;
+      }
+
       const dateKey = job.startTime
         ? dayjs(job.startTime).format('YYYY-MM-DD')
         : dayjs(job.createdAt).format('YYYY-MM-DD');

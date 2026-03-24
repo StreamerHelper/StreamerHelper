@@ -1,136 +1,153 @@
 # StreamerHelper Web Server
 
-<p align="center">
-<img src="https://s1.ax1x.com/2020/07/22/UbKCpq.png" alt="StreamerHelper" width="100px">
-</p>
-<h1 align="center">StreamerHelper</h1>
+StreamerHelper 后端服务，基于 Midway.js 框架的直播录制与内容管理系统。
 
-> 全自动直播录制 & B站投稿服务端 — StreamerHelper v2
+## 功能特性
 
-[![MIT](https://img.shields.io/github/license/ZhangMingZhao1/StreamerHelper?color=red)](https://github.com/ZhangMingZhao1/StreamerHelper/blob/master/LICENSE)
-[![pnpm version](https://img.shields.io/pnpm/v/pnpm)](https://github.com/ZhangMingZhao1/StreamerHelper/blob/master/package.json)
-[![nodejs version](https://img.shields.io/pnpm/v/node?color=23&label=node&logoColor=white)](https://github.com/ZhangMingZhao1/StreamerHelper/blob/master/package.json)
+- **直播录制** - 支持多平台直播流实时录制与分段
+- **弹幕处理** - 弹幕采集、XML 解析、ASS 字幕生成
+- **视频高光** - 基于 AI 的直播精彩片段自动提取
+- **B站集成** - 投稿管理、视频上传、认证授权
+- **ASR 字幕** - 自动语音识别生成字幕
+- **任务队列** - 基于 BullMQ 的异步任务处理
 
-自动检测主播开播、录制直播流、采集弹幕，并将录像投稿至 B站。支持 **B站直播**、**虎牙**、**斗鱼** 平台。
+## 技术栈
+
+| 类别 | 技术 |
+|------|------|
+| 框架 | [Midway.js](https://midwayjs.org/) + Koa |
+| 语言 | TypeScript |
+| 数据库 | PostgreSQL + TypeORM |
+| 缓存/队列 | Redis + BullMQ |
+| 对象存储 | MinIO (S3 兼容) |
+| 视频处理 | FFmpeg |
+| 字幕生成 | ASS/ASR |
 
 ## 快速开始
 
-```bash
-# 克隆
-git clone https://github.com/StreamerHelper/web-server.git && cd web-server
+### 环境要求
 
-# 启动基础设施 (PostgreSQL / Redis / MinIO)
-docker-compose up -d
+- Node.js >= 16.0.0
+- Docker & Docker Compose
 
-# 安装依赖 & 迁移数据库
-pnpm install
-pnpm run migration:run
-
-# 启动
-pnpm run dev
-```
-
-服务地址：`http://localhost:7001`
-队列面板：`http://localhost:7001/ui`
-
-### 生产部署
+### 启动基础设施
 
 ```bash
-docker-compose -f docker-compose.full.yml up -d
+docker compose -f docker-compose.dev.yml up -d
 ```
 
-详见 [DEPLOY.md](DEPLOY.md)。
+启动服务：
+- PostgreSQL (localhost:5432)
+- Redis (localhost:6379)
+- MinIO (localhost:9000, Console: localhost:9001)
 
-## 基础设施
+### 安装依赖
 
-通过 `docker-compose up -d` 启动：
-
-| 服务 | 端口 | 凭证 |
-|------|------|------|
-| PostgreSQL | 5432 | postgres / postgres |
-| Redis | 6379 | — |
-| MinIO | 9000 / 9001 | minioadmin / minioadmin |
-| pgAdmin | 5050 | admin@example.com / admin |
-
-## API
-
-### 主播 `/api/streamers`
-
-```
-GET    /                获取列表 (?platform=bilibili|huya|douyu)
-GET    /stats           统计
-GET    /:id             详情
-POST   /                添加
-POST   /batch           批量添加
-PUT    /:id             更新
-POST   /:id/delete      删除
-POST   /:id/check       检查直播状态
+```bash
+npm install
 ```
 
-### 录制任务 `/api/jobs`
+### 数据库迁移
 
-```
-GET    /                列表 (?status=&streamerId=&sortBy=&limit=&offset=)
-GET    /stats           统计
-GET    /browse          按日期分组浏览 (?streamerName=&startDate=&endDate=)
-GET    /streamers       有录制记录的主播列表
-GET    /:id             详情
-GET    /:id/videos      视频列表（含预签名播放链接）
-POST   /start           手动启动录制
-POST   /:id/stop        停止
-POST   /:id/retry       重试
-POST   /:id/delete      删除
-POST   /:id/videos/merge  合并分片
+```bash
+npm run migration:run
 ```
 
-### B站 `/api/bilibili`
+### 启动开发服务器
 
-```
-GET    /auth/status          登录状态
-POST   /auth/qrcode          获取登录二维码
-POST   /auth/poll             轮询扫码结果
-POST   /auth/logout           登出
-POST   /upload/video          上传视频
-GET    /upload/partitions     分区列表
-POST   /submission            创建投稿任务
-GET    /submission            投稿列表
-GET    /submission/:id        投稿详情
-GET    /submission/job/:jobId 某次录制的投稿
+```bash
+npm run dev
 ```
 
-### 系统 `/api/system`
-
-```
-GET    /health     健康检查
-GET    /info       系统信息（任务/主播/队列状态）
-```
-
-### 任务状态
-
-```
-pending → recording → processing → completed
-              ↘            ↘
-            stopping      failed
-              ↓
-           cancelled
-```
+服务将在 http://localhost:7001 启动。
 
 ## 配置
 
-配置文件：`src/config/config.default.ts`
+配置文件搜索顺序（按优先级）：
 
-关键配置项：
+1. `CONFIG_DIR` 环境变量指定的目录
+2. 项目根目录的 `settings.json`（仅开发模式）
+3. `/app/config`（Docker 容器内）
+4. `./config/settings.json`（本地开发）
+5. `~/.streamer-helper/settings.json`（默认）
 
-| 配置路径 | 默认值 | 说明 |
-|---------|--------|------|
-| `koa.port` | 7001 | 服务端口 |
-| `livestream.recorder.segmentDuration` | 10 | 分片时长（秒） |
-| `livestream.recorder.maxRecordingTime` | 86400 | 最长录制（秒） |
-| `livestream.poller.checkInterval` | 60 | 开播检测间隔（秒） |
-| `livestream.s3.endpoint` | http://localhost:9000 | S3 端点 |
-| `livestream.s3.bucket` | livestream-archive | 存储桶 |
-| `submission.defaultTid` | 171 | 默认 B站分区 |
+### 默认服务凭证
 
-## 许可证
+| 服务 | 用户名 | 密码 |
+|------|--------|------|
+| PostgreSQL | postgres | postgres |
+| MinIO | minioadmin | minioadmin |
+| pgAdmin | admin@streamerhelper.dev | admin |
 
-[MIT](LICENSE)
+## 常用命令
+
+```bash
+# 开发
+npm run dev              # 启动开发服务器
+npm run build            # 构建生产版本
+npm run start            # 启动生产服务器
+
+# 数据库迁移
+npm run migration:show   # 查看迁移状态
+npm run migration:run    # 运行迁移
+npm run migration:revert # 回滚迁移
+
+# 测试
+npm run test             # 运行测试
+npm run cov              # 测试覆盖率
+
+# 代码检查
+npm run lint             # ESLint 检查
+npm run lint:fix         # 自动修复
+```
+
+## Docker 服务
+
+```bash
+# 启动所有服务
+docker compose -f docker-compose.dev.yml up -d
+
+# 查看状态
+docker compose -f docker-compose.dev.yml ps
+
+# 查看日志
+docker compose -f docker-compose.dev.yml logs -f
+
+# 停止服务
+docker compose -f docker-compose.dev.yml down
+
+# 停止并删除数据
+docker compose -f docker-compose.dev.yml down -v
+```
+
+## 工程结构
+
+```
+web-server/
+├── src/
+│   ├── config/          # 配置加载器
+│   ├── controller/      # API 控制器
+│   ├── entity/          # 数据库实体
+│   ├── interface/       # 类型定义
+│   ├── migration/       # 数据库迁移
+│   ├── platform/        # 平台适配器
+│   ├── processor/       # 业务处理器
+│   ├── repository/      # 数据访问层
+│   ├── scripts/         # 工具脚本
+│   └── service/         # 业务服务
+├── config/              # 配置文件
+├── docker-compose.dev.yml
+├── settings.json        # 本地开发配置
+└── package.json
+```
+
+## 服务地址
+
+| 服务 | 地址 |
+|------|------|
+| API | http://localhost:7001 |
+| PostgreSQL | localhost:5432 |
+| Redis | localhost:6379 |
+| MinIO API | http://localhost:9000 |
+| MinIO Console | http://localhost:9001 |
+| pgAdmin | http://localhost:5050 |

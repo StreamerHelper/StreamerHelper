@@ -136,13 +136,16 @@ export class JobController {
   async browseJobs(
     @Query('streamerName') streamerName?: string,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
+    @Query('minSegmentCount') minSegmentCount?: string
   ) {
     try {
+      const minSegments = minSegmentCount ? parseInt(minSegmentCount, 10) : undefined;
       const groups = await this.jobService.findAllGroupedByDate(
         streamerName,
         startDate,
-        endDate
+        endDate,
+        minSegments
       );
 
       // 转换为数组格式，按日期降序排列
