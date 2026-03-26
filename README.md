@@ -43,7 +43,7 @@ StreamerHelper 是一个功能强大的直播录制自动化系统，支持多�
 
 ```bash
 # 克隆仓库
-git clone https://github.com/StreamerHelper/StreamerHelper.git
+git clone https://github.com/StreamerHelper/infra StreamerHelper/infra
 cd StreamerHelper/infra
 
 # 安装依赖并初始化配置
