@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![StreamerHelper Logo](https://s1.ax1x.com/2020/07/22/UbKCpq.png)
+<img src="https://s1.ax1x.com/2020/07/22/UbKCpq.png" alt="StreamerHelper" width="120" />
 
 全自动直播录制 & B站投稿系统
 
